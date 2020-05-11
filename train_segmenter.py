@@ -21,18 +21,18 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 def main():
 
-    train_fid = "./lists/mr_train_list"
-    val_fid = "./lists/mr_val_list"
-    output_path = "./tmp_exps/mr_baseline"
+    train_fid = "../Cardiac_4D/MRCT/PnpAda_release_data/train&val/mr_train_list"
+    val_fid = "../Cardiac_4D/MRCT/PnpAda_release_data/train&val/mr_val_list"
+    output_path = "./exps/mr_baseline"
 
     restore = True # set True if resume training from stored model
     restored_path = output_path
     lr_update_flag = False # Set True if want to use a new learning rate for fine-tuning
 
     num_cls = 5
-    batch_size = 10
-    training_iters = 10
-    epochs = 5000
+    batch_size = 8
+    training_iters = 1000
+    epochs = 500
     checkpoint_space = 1500
     image_summeris = True
 
@@ -60,13 +60,20 @@ def main():
     
     train_list = _read_lists(train_fid)
     val_list =  _read_lists(val_fid)
+    path_prefix = '../Cardiac_4D/MRCT/PnpAda_release_data/train&val/'
+    train_list = [path_prefix + s for s in train_list]
+    val_list = [path_prefix + s for s in val_list]
+    print('length of train_list:', len(train_list))
+    print(train_list[:3])
 
     trainer = drn.Trainer(net, train_list = train_list, val_list = val_list, num_cls = num_cls, \
                              batch_size = batch_size, opt_kwargs = opt_kwargs, checkpoint_space = checkpoint_space,\
                              optimizer = optimizer, lr_update_flag = lr_update_flag)
 
     # start tensorboard before getting started
+    command0 = 'fuser 6999/tcp -k'
     command1 = "tensorboard --logdir=" + output_path + " --port=6999 " +  " &"
+    os.system(command0)
     os.system(command1)
 
     print("Now start training...")

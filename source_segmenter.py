@@ -278,11 +278,15 @@ class Full_DRN(object):
         :param sess: current session instance
         :param model_path: path to checkpoint file location
         """
-        saver = tf.train.Saver(tf.contrib.framework.get_variables() + tf.get_collection_ref("internal_batchnorm_variables") )
+        # saver = tf.train.Saver(tf.contrib.framework.get_variables() + \
+        #                         tf.get_collection_ref("internal_batchnorm_variables"))
+        saver = tf.train.Saver(tf.contrib.framework.get_variables())
         logging.info("Model restored from file: %s" % model_path)
+        print("Model restored from file: %s" % model_path)
         try:
             saver.restore(sess, model_path)
             logging.info("Model restored from file: %s" % model_path)
+            print("Model restored from file: %s" % model_path)
         except:
             variables = tf.global_variables()
             reader = tf.pywrap_tensorflow.NewCheckpointReader(model_path)
@@ -295,6 +299,7 @@ class Full_DRN(object):
             restorer.restore(sess, model_path)
 
             logging.info("Model restored from file: %s with relaxation" % model_path)
+            print("Model restored from file: %s with relaxation" % model_path)
             logging.info("Restored variables: ")
             for vname in list(var_keep_dic.keys()):
                 logging.info(str(vname))
@@ -444,6 +449,8 @@ class Trainer(object):
         init_glb, init_loc = self._initialize(training_iters, output_path, restore)
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = False
+
+        # tf.reset_default_graph()
         with tf.Session(config=config) as sess:
             sess.run([init_glb, init_loc])
             coord = tf.train.Coordinator()
@@ -452,6 +459,7 @@ class Trainer(object):
                 if restored_path is None:
                     raise Exception("No restore path is provided")
                 ckpt = tf.train.get_checkpoint_state(restored_path)
+                print(ckpt)
                 if ckpt and ckpt.model_checkpoint_path:
                     self.net.restore(sess, ckpt.model_checkpoint_path)
                 else:
@@ -475,46 +483,51 @@ class Trainer(object):
                 for step in range((epoch*training_iters), ((epoch+1)*training_iters)):
                     logging.info("Running step %s epoch %s ..."%(str(step), str(epoch)))
                     start = time.time()
-                    batch, fid = sess.run([feed_all, feed_fid])
-                    batch_x = batch[:,:,:,0:3]
-                    raw_y = batch[:,:,:,3] # a single map with multi-classes
-                    batch_y = _label_decomp(self.num_cls, raw_y) # n_class binary maps
-                    fids = [ _single.decode('utf-8').split(":")[0] for _single in fid ]
+                    try:
+                        batch, fid = sess.run([feed_all, feed_fid])
+                        batch_x = batch[:,:,:,0:3]
+                        raw_y = batch[:,:,:,3] # a single map with multi-classes
+                        batch_y = _label_decomp(self.num_cls, raw_y) # n_class binary maps
+                        fids = [ _single.decode('utf-8').split(":")[0] for _single in fid ]
 
-                    _, loss, lr = sess.run((self.optimizer, self.net.cost, self.learning_rate_node),
-                                                      feed_dict={self.net.x: batch_x,
-                                                                 self.net.y: batch_y,
-                                                                 self.net.main_bn: True,
-                                                                 self.net.adapt_bn: True,
-                                                                 self.net.keep_prob: dropout})
-                    if verbose:
-                        logging.info("Training at step %s epoch %s , loss is %0.4f"%(str(step), str(epoch), loss))
-                        logging.info("Time elapsed %s seconds"%(str(time.time() - start)))
+                        _, loss, lr = sess.run((self.optimizer, self.net.cost, self.learning_rate_node),
+                                                        feed_dict={self.net.x: batch_x,
+                                                                    self.net.y: batch_y,
+                                                                    self.net.main_bn: True,
+                                                                    self.net.adapt_bn: True,
+                                                                    self.net.keep_prob: dropout})
+                        
+                        if verbose:
+                            logging.info("Training at step %s epoch %s , loss is %0.4f"%(str(step), str(epoch), loss))
+                            logging.info("Time elapsed %s seconds"%(str(time.time() - start)))
 
-                    if step % display_step == 0:
-                        self.output_minibatch_stats(sess, train_summary_writer, step, batch_x, batch_y, raw_y)
+                        if step % display_step == 0:
+                            self.output_minibatch_stats(sess, train_summary_writer, step, batch_x, batch_y, raw_y)
 
-                    if step % (display_step * 1) == 0:
-                        val_batch = feed_val.eval()
-                        val_x = val_batch[:,:,:,0:3]
-                        val_y = val_batch[:,:,:,3]
-                        val_y = _label_decomp(self.num_cls, val_y)
-                        detail_flag = False
-                        if step % (1 * display_step) == 0:
-                            detail_flag = True
-                        self.val_stats(sess, val_summary_writer, step, val_x, val_y, detail_flag)
+                        if step % (display_step * 1) == 0:
+                            val_batch = feed_val.eval()
+                            val_x = val_batch[:,:,:,0:3]
+                            val_y = val_batch[:,:,:,3]
+                            val_y = _label_decomp(self.num_cls, val_y)
+                            detail_flag = False
+                            if step % (1 * display_step) == 0:
+                                detail_flag = True
+                            self.val_stats(sess, val_summary_writer, step, val_x, val_y, detail_flag)
 
-                    if step % (self.checkpoint_space) == 0 and step > 10000:
-                        if step == 0:
-                            pass
-                        else:
-                            save_path = _save(sess, save_path, global_step = self.global_step.eval())
-                            last_ckpt = tf.train.get_checkpoint_state(output_path)
-                            if last_ckpt and last_ckpt.model_checkpoint_path:
-                                self.net.restore(sess, last_ckpt.model_checkpoint_path)
-                            logging.info("Model has been restored for re-allocation")
-                            _pre_lr = sess.run(self.learning_rate_node)
-                            sess.run( tf.assign(self.learning_rate_node, _pre_lr * 0.9 )  )
+                        if step % (self.checkpoint_space) == 0 and step > 10000:
+                            if step == 0:
+                                pass
+                            else:
+                                save_path = _save(sess, save_path, global_step = self.global_step.eval())
+                                last_ckpt = tf.train.get_checkpoint_state(output_path)
+                                if last_ckpt and last_ckpt.model_checkpoint_path:
+                                    self.net.restore(sess, last_ckpt.model_checkpoint_path)
+                                logging.info("Model has been restored for re-allocation")
+                                _pre_lr = sess.run(self.learning_rate_node)
+                                sess.run( tf.assign(self.learning_rate_node, _pre_lr * 0.9 )  )
+                    
+                    except tf.errors.OutOfRangeError:
+                        pass
 
                 logging.info("Global step %s"%str(self.global_step.eval()))
             logging.info("Optimization Finished!")
@@ -608,7 +621,7 @@ class Trainer(object):
                 vol = np.zeros( [self.net.batch_size, raw_size[0], raw_size[1], raw_size[2]]  )
                 slice_y = np.zeros( [self.net.batch_size, label_size[0], label_size[1]]  )
 
-                for idx, jj in enumerate(range(ii * self.net.batch_size : (ii + 1) * self.net.batch_size)):
+                for idx, jj in enumerate(range(ii * self.net.batch_size, (ii + 1) * self.net.batch_size)):
                     vol[idx,...] = raw[ ..., jj -1: jj+2  ].copy()
                     slice_y[idx,...] = raw_y[..., jj ].copy()
                 vol_y = _label_decomp(self.num_cls, slice_y)
@@ -616,7 +629,7 @@ class Trainer(object):
                                                 feed_dict = {self.net.x: vol, self.net.y: vol_y, self.net.keep_prob: 1.0, \
                                                              self.net.main_bn: False, self.net.adapt_bn: False})
 
-                for idx, jj in enumerate(range(ii * self.net.batch_size : (ii + 1) * self.net.batch_size)):
+                for idx, jj in enumerate(range(ii * self.net.batch_size, (ii + 1) * self.net.batch_size)):
                     tmp_y[..., jj] = pred[idx, ... ].copy()
                 logging.info(" part %s of %s of sample %s has been processed.."%(str(ii), str(floor(raw.shape[2] // self.net.batch_size)), str(idx_file)))
                 sample_cm += curr_conf_mat

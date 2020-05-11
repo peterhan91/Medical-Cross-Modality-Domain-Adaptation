@@ -97,7 +97,11 @@ def batch_norm(x, is_training = True, scope = None, trainable = True):
     Note:
         For training and testing the discriminator the batch norm is actually using batch statistics instead of global ones, making this somehow work as instance normalization
     """
-    return tf.contrib.layers.batch_norm(x, is_training = is_training, decay = 0.90, scale = True, center = True, scope = scope, variables_collections = ["internal_batchnorm_variables"], updates_collections = None, trainable = trainable)
+    return tf.contrib.layers.batch_norm(x, is_training = is_training, 
+                                        decay = 0.90, scale = True, center = True, 
+                                        scope = scope, 
+                                        variables_collections = ["internal_batchnorm_variables"], 
+                                        updates_collections = None, trainable = trainable)
 
 def max_pool2d(x,n):
     return tf.nn.max_pool(x, ksize=[1, n, n, 1], strides=[1, n, n, 1], padding='SAME')
