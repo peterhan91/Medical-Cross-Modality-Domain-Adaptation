@@ -82,8 +82,7 @@ def _label_decomp(num_cls, label_vol):
     _batch_shape = list(label_vol.shape)
     _vol = np.zeros(_batch_shape)
     _vol[label_vol == 0] = 1
-    _vol = _vol[..., np.newaxis]
-    for i in range(num_cls):
+    _vol = _vol[..., np.newaxis] 
         if i == 0:
             continue
         _n_slice = np.zeros(label_vol.shape)

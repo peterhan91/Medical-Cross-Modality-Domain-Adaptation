@@ -100,7 +100,7 @@ class Full_DRN(object):
             self.conv_weights.append(wr1_2)
 
         with tf.name_scope('group_2') as scope:
-            wr2_1 = weight_variable(shape = [3, 3, feature_base, feature_base * 2], trainable = adapt_trainable)
+            wr2_1 = weight_variable(shape = [3, 3, feature_base, feature_base * 2], trainable = adapt_trainable) # [3,3,16,32]
             wr2_2 = weight_variable(shape = [3, 3, feature_base * 2, feature_base * 2], trainable = adapt_trainable)
             block2_1 = residual_block(out1, wr2_1, wr2_2, inc_dim = True, leak = True, keep_prob = keep_prob, is_train = adapt_bn, bn_trainable = adapt_trainable)
             out2 = max_pool2d(block2_1, n = 2)
@@ -208,6 +208,72 @@ class Full_DRN(object):
 
         return logits
 
+    def create_mask_critic(self, input_mask, feature_base = 16, 
+                            keep_prob = 0.75, num_cls = 5, 
+                            m_cls_bn = True, m_cls_trainable = True):
+        """
+        domain discriminator for MRI and CT segmentation maskS
+
+        """
+        with tf.variable_scope('mask_cls_1') as scope:
+            wr1_1m = sharable_weight_variable( shape = [3, 3, num_cls, feature_base], 
+                                            trainable = m_cls_trainable  , name = "Variable" )
+            out1m = conv_bn_relu2d( input_mask, wr1_1m, keep_prob, strides = [1,2,2,1], 
+                                    is_train = m_cls_bn, bn_trainable = m_cls_trainable, 
+                                    scope = 'mask_cls_1', leak = True  ) # use strided conv instead of maxpool to
+            self.m_cls_weights.append( wr1_1m )
+
+        with tf.variable_scope('mask_cls_2') as scope:
+            wr2_1m = sharable_weight_variable( shape = [3, 3, feature_base, feature_base ], 
+                                            trainable = m_cls_trainable  , name = "Variable" )
+            wr2_2m = sharable_weight_variable( shape = [3, 3, feature_base, feature_base ], 
+                                            trainable = m_cls_trainable  , name = "Variable_1" )
+            block2_1m = residual_block( out1m, wr2_1m, wr2_2m, keep_prob = keep_prob, 
+                                        inc_dim = False, is_train = m_cls_bn, 
+                                        bn_trainable = m_cls_trainable, scope = 'm_cls_2'   , leak = True   )
+            wr2_3d = sharable_weight_variable( shape = [5,5, feature_base, feature_base * 2], 
+                                            trainable = m_cls_trainable, name = "Variable_2"  )
+            out2m = conv_bn_relu2d( block2_1m, wr2_3d, keep_prob, strides = [1,4,4,1], 
+                                    is_train = m_cls_bn, bn_trainable = m_cls_trainable, 
+                                    scope = 'm_cls_2_3', leak = True  )
+            self.m_cls_weights.append( wr2_1m  )
+            self.m_cls_weights.append( wr2_2m  )
+            self.m_cls_weights.append( wr2_3d  )
+
+        with tf.variable_scope('mask_cls_3') as scope:
+            wr3_1m = sharable_weight_variable( shape = [3, 3, feature_base * 2, feature_base * 4], 
+                                            trainable = m_cls_trainable  , name = "Variable" )
+            wr3_2m = sharable_weight_variable( shape = [3, 3, feature_base * 4, feature_base * 4 ], 
+                                            trainable = m_cls_trainable  , name = "Variable_1" )
+            block3_1m = residual_block( out2m, wr3_1m, wr3_2m, keep_prob = keep_prob, 
+                                        inc_dim = True, is_train = m_cls_bn, 
+                                        bn_trainable = m_cls_trainable, scope = 'm_cls_3'   , leak = True   )
+            wr3_3d = sharable_weight_variable( shape = [5,5, feature_base * 4, feature_base * 8], 
+                                        trainable = m_cls_trainable, name = "Variable_2"  )
+            out3m = conv_bn_relu2d( block3_1m, wr3_3d, keep_prob, strides = [1,4,4,1], 
+                                    is_train = m_cls_bn, bn_trainable = m_cls_trainable, 
+                                    scope = 'm_cls_3_3', leak = True  )
+            self.m_cls_weights.append( wr3_1m  )
+            self.m_cls_weights.append( wr3_2m  )
+            self.m_cls_weights.append( wr3_3d  )
+
+        with tf.variable_scope('mask_cls_4') as scope:
+            wr4_1m = sharable_weight_variable( shape = [5, 5, feature_base * 8, feature_base * 16], 
+                                            trainable = m_cls_trainable  , name = "Variable" )
+            conv_4m = conv_bn_relu2d(out3m, wr4_1m, strides = [1,4,4,1], keep_prob = keep_prob, 
+                                    padding = "SYMMETRIC", scope = 'm_cls_4', is_train = m_cls_bn, 
+                                    bn_trainable = m_cls_trainable, leak = True)
+            self.m_cls_weights.append( wr4_1m  )
+
+        with tf.variable_scope('m_cls_out') as scope:
+            wm_out = sharable_weight_variable( shape = [ feature_base* 16 * 4,1 ], 
+                                            trainable = m_cls_trainable , name = "Variable"  )
+            out5m_flat = tf.reshape(conv_4m, [-1, feature_base * 16 * 4])
+            m_cls_logits = tf.matmul(out5m_flat, wm_out)
+            self.m_cls_weights.append(wm_out)
+
+        return m_cls_logits
+    
     def _get_cost(self, logits, cost_kwargs):
         """
         Compute cost for segmentation network

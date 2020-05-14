@@ -6,14 +6,16 @@ import pdb
 import tensorflow as tf
 from math import floor
 
-def conv_bn_relu2d(x, W, keep_prob, padding = 'SAME', strides = [1,1,1,1], is_train = True, scope = None, bn_trainable = True, leak = False):
+def conv_bn_relu2d(x, W, keep_prob, padding = 'SAME', strides = [1,1,1,1], 
+                is_train = True, scope = None, bn_trainable = True, leak = False):
     bn = conv_bn_2d(x, W, keep_prob, padding = padding, strides = strides, is_train = is_train, scope = scope, bn_trainable = bn_trainable )
     if leak is True:
     	return tf.nn.leaky_relu(bn)
     else:
     	return tf.nn.relu(bn)
 
-def conv_bn_2d(x, W, keep_prob, padding = 'SAME', strides = [1,1,1,1], is_train = True, scope = None, bn_trainable = True):
+def conv_bn_2d(x, W, keep_prob, padding = 'SAME', strides = [1,1,1,1], 
+            is_train = True, scope = None, bn_trainable = True):
     if padding == 'SAME':
         conv_2d = tf.nn.conv2d(x, W, strides=strides, padding = 'SAME')
     elif padding == 'SYMMETRIC': # to deal with boundary effect!
@@ -161,7 +163,7 @@ def residual_block(x, w1, w2, keep_prob, inc_dim = False, is_train = True, scope
     _inner_conv = conv_bn_relu2d(x, w1, keep_prob = keep_prob, is_train = is_train, scope = _loc_scope1, bn_trainable = bn_trainable, leak = leak, padding = padding)
     _inner_conv = conv_bn_2d(_inner_conv, w2, keep_prob = keep_prob, is_train = is_train, scope = _loc_scope2, bn_trainable = bn_trainable, padding = padding)
     if inc_dim is True:
-        x_s = tf.pad(x, [ [0,0], [0,0], [0,0], [_x_channel // 2, _x_channel // 2]])
+        x_s = tf.pad(x, [ [0,0], [0,0], [0,0], [_x_channel // 2, _x_channel // 2]]) # padding 0 in channel dim to x_s (x_source)
     else:
         x_s = x
     if leak is False:
