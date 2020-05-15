@@ -20,11 +20,11 @@ from util.dataset import NumpyDataset
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("Device being used:", device)
 
-def train_model(num_classes, directory, LR=1e-3,
-                 num_epochs=50, save=True, path='mrnet.pth.tar'):
+def train(num_classes, directory, LR=1e-3,
+        num_epochs=50, save=True, path='mrnet.pth.tar'):
 
-    model = I3ResNet(copy.deepcopy(resnet), num_classes).to(device)
-    summary(model, input_size=(3, 32, 224, 224))
+    model = Dilated_FCN.to(device)
+    summary(model, input_size=(3, 256, 256))
     criterion = nn.BCELoss() # standard crossentropy loss for classification
     optimizer = optim.SGD(model.parameters(), lr=LR, 
                         momentum=0.9, weight_decay=1e-4)  # hyperparameters as given in paper sec 4.1

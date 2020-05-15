@@ -47,10 +47,8 @@ class NumpyDataset(Dataset):
         l = np.moveaxis(l, -1, 0)        # shape: [5,1,256,256]
 
         sample = {'buffers': d, 'labels': l}
-
         if self.transform:
             sample = self.transform(sample)
-
         return sample 
 
 class ToTensor(object):

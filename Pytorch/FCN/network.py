@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from blocks import *
+from FCN.blocks import *
 
 class Dilated_FCN(nn.Module):
     def __init__(self, input_channel=3, feature_base=16, n_class=5):
@@ -25,10 +25,10 @@ class Dilated_FCN(nn.Module):
         self.block7_1 = R_Block(feature_base*16, feature_base*32, leaky=True)
         self.block7_2 = R_Block(feature_base*32, feature_base*32, leaky=True)
         # Dilated blocks
-        self.block8_1 = D_block(feature_base*32, feature_base*32, leaky=True)
-        self.block8_2 = D_block(feature_base*32, feature_base*32, leaky=True)
+        self.block8_1 = D_Block(feature_base*32, feature_base*32, leaky=True)
+        self.block8_2 = D_Block(feature_base*32, feature_base*32, leaky=True)
         # Pixel shuffel blocks
-        self.block9_1 = P_block(feature_base*32, leaky=True, n_cls=n_class)
+        self.block9_1 = P_Block(feature_base*32, n_cls=n_class)
 
     def forward(self, x):
         x = self.conv1(x)

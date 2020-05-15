@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
-from utils import tensor2cuda
+from util.utils import tensor2cuda
 
 def project(x, original_x, epsilon, _type='linf'):
     if _type == 'linf':

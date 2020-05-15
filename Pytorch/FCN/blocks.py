@@ -61,10 +61,9 @@ class R_Block(nn.Module): # basic residual block with dropout layers
 
         out += identity
         out = self.relu(out)
-
         return out
 
-class D_block(nn.Module): # Dilated residual block
+class D_Block(nn.Module): # Dilated residual block
 
     def __init__(self, inplanes, planes, stride=1, shortcut_conv=False, groups=1, 
             dilation=2, norm_layer=None, leaky=False):
@@ -109,14 +108,13 @@ class D_block(nn.Module): # Dilated residual block
 
         out += identity
         out = self.relu(out)
-
         return out
 
-class P_block(nn.Module): # Upsampling block with pixel shuffle and 4 conv
+class P_Block(nn.Module): # Upsampling block with pixel shuffle and 4 conv
 
     def __init__(self, inplanes, stride=1, 
                 dilation=2, norm_layer=None, n_cls=5):
-        super(D_Block, self).__init__()
+        super(P_Block, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
 
@@ -153,5 +151,4 @@ class P_block(nn.Module): # Upsampling block with pixel shuffle and 4 conv
         out = self.pixelshuffle(out) 
         out = self.conv4(out)
         out = self.conv5(out)
-
         return out
