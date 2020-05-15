@@ -8,87 +8,72 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 import torchvision
 from torchsummary import summary
+from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms, utils
 
 from FCN.network import Dilated_FCN
 from util.utils import save_checkpoint
 from util.attack import *
-from util.dataset import NumpyDataset
-
+from util.dataset import NumpyDataset, ToTensor
 
 # Use GPU if available else revert to CPU
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("Device being used:", device)
 
-def train(num_classes, directory, LR=1e-3,
+
+def train(num_classes, directory, LR=0.2, batch_size=8,
         num_epochs=50, save=True, path='mrnet.pth.tar'):
 
-    model = Dilated_FCN.to(device)
-    summary(model, input_size=(3, 256, 256))
-    criterion = nn.BCELoss() # standard crossentropy loss for classification
-    optimizer = optim.SGD(model.parameters(), lr=LR, 
-                        momentum=0.9, weight_decay=1e-4)  # hyperparameters as given in paper sec 4.1
-    # scheduler = optim.lr_scheduler.StepLR(optimizer, 
-    #                                     step_size=50, gamma=0.9)  # the scheduler divides the lr by 10 every 10 epochs
-
-    # prepare the dataloaders into a dict
-    MR_dataset = MRIDataset(directory=directory, rijeka=train_Rijeka, transform=transforms.Compose([ToTensor()]))
-    train_dataloader = DataLoader(MR_dataset, batch_size=4, 
-                                shuffle=True, num_workers=4)
-    val_dataloader = DataLoader(MRIDataset(directory=directory, mode='valid', rijeka=train_Rijeka, 
+    npdataset = NumpyDataset(directory, transform=transforms.Compose([ToTensor()])) 
+    train_dataloader = DataLoader(
+                                NumpyDataset(directory, 
                                             transform=transforms.Compose([ToTensor()])), 
-                                batch_size=4, num_workers=4)
+                                batch_size=batch_size, shuffle=True, num_workers=8
+                                )
+    val_dataloader = DataLoader(
+                                NumpyDataset(directory, mode='valid', 
+                                            transform=transforms.Compose([ToTensor()])), 
+                                batch_size=batch_size, num_workers=4
+                                )                                
     dataloaders = {'train': train_dataloader, 'val': val_dataloader}
     dataset_sizes = {x: len(dataloaders[x].dataset) for x in ['train', 'val']}
+
+    SummaryWriter(comment=f'LR_{LR}_BS_{batch_size}')
+    model = Dilated_FCN().to(device)
+    optimizer = optim.SGD(model.parameters(), lr=LR, 
+                        momentum=0.2, weight_decay=1e-4)  
+    scheduler = optim.lr_scheduler.ExponentialLR(optimizer=optimizer, gamma=0.95)
 
     # saves the time the process was started, to compute total time at the end
     start = time.time()
     epoch_resume = 0
     best_loss = 1e6
-    MAX_patient = 6
-    patient = 0
 
-    # check if there was a previously saved checkpoint
     if os.path.exists(path):
-        # loads the checkpoint
         checkpoint = torch.load(path)
-        print("Reloading from previously saved checkpoint")
-        # restores the model and optimizer state_dicts
+        print("Reloading model from previously saved checkpoint")
         model.load_state_dict(checkpoint['state_dict'])
         optimizer.load_state_dict(checkpoint['opt_dict'])
-        # obtains the epoch the training is to resume from
         epoch_resume = checkpoint["epoch"]
 
     for epoch in tqdm(range(epoch_resume, num_epochs), unit="epochs", 
                         initial=epoch_resume, total=num_epochs, ascii=True):
-        # each epoch has a training and validation step, in that order
+        
         for phase in ['train', 'val']:
-            # reset the running loss and corrects
             running_loss = 0.0
-            # running_corrects = 0
-            # set model to train() or eval() mode depending on whether it is trained
-            # or being validated. Primarily affects layers such as BatchNorm or Dropout.
             if phase == 'train':
-                # scheduler.step() is to be called once every epoch during training
-                # scheduler.step()
                 model.train()
             else:
                 model.eval()
 
             for sample in dataloaders[phase]:
-                # move inputs and labels to the device the training is taking place on
                 inputs, labels = sample['buffers'], sample['labels']
                 inputs = inputs.to(device, dtype= torch.float)
                 labels = labels.to(device, dtype= torch.float)
                 optimizer.zero_grad()
 
-                # keep intermediate states iff backpropagation will be performed. If false, 
-                # then all intermediate states will be thrown away during evaluation, to use
-                # the least amount of memory possible.
                 with torch.set_grad_enabled(phase=='train'):
-                    outputs = model(inputs)
-                    # we're interested in the indices on the max values, not the values themselves
-                    # _, preds = torch.max(outputs, 1)  
+                    outputs = model(inputs) 
                     loss = criterion(outputs, labels)
 
                     # Backpropagate and optimize iff in training mode, else there's no intermediate
