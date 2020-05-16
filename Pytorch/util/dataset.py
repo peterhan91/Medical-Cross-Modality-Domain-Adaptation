@@ -25,7 +25,7 @@ class NumpyDataset(Dataset):
     def __len__(self):
         return len(self.Numpylists)
 
-    def _label_decomp(label_vol, num_cls):
+    def _label_decomp(self, label_vol, num_cls):
         _batch_shape = list(label_vol.shape)
         _vol = np.zeros(_batch_shape)
         _vol[label_vol == 0] = 1
@@ -43,19 +43,24 @@ class NumpyDataset(Dataset):
         name_l = os.path.join(self.folder, 'label', self.Numpylists[index])
         d_ = np.float32(np.load(name_d))                # shape: [256,256,3]
         l_ = np.float32(np.load(name_l))                # shape: [256,256,1]
-        l_ = _label_decomp(l_, self.n_class)            # shape: [256,256,5]
+        l = self._label_decomp(l_, self.n_class)        # shape: [256,256,5]
         d = np.moveaxis(d_, -1, 0)                      # shape: [3,256,256]
-        l = np.moveaxis(l_, -1, 0)                      # shape: [5,256,256]
-        assert d.shape == [3, 256, 256]
-        assert l.shape == [self.n_class, 256, 256]
+        l_ = np.moveaxis(l_, -1, 0)                     # shape: [1,256,256]
+        l = np.moveaxis(l, -1, 0)                       # shape: [5,256,256]
+        assert d.shape == (3, 256, 256)
+        assert l.shape == (self.n_class, 256, 256)
+        assert l_.shape == (1, 256, 256)
 
-        sample = {'buffers': d, 'labels': l}
+        sample = {'buffers': d, 'labels': l, 'labels_':np.squeeze(l_)}
         if self.transform:
             sample = self.transform(sample)
         return sample 
 
 class ToTensor(object):
     def __call__(self, sample):
-        buffers, labels = sample['buffers'], sample['labels']
-        return {'buffers': torch.from_numpy(buffers),
-                'labels': torch.from_numpy(labels)}
+        buffers, labels, labels_ = sample['buffers'], sample['labels'], sample['labels_']
+        return {
+                'buffers': torch.from_numpy(buffers),
+                'labels': torch.from_numpy(labels),
+                'labels_': torch.from_numpy(labels_)
+                }
