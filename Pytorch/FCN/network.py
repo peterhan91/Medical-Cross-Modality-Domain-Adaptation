@@ -5,6 +5,9 @@ from FCN.blocks import *
 class Dilated_FCN(nn.Module):
     def __init__(self, input_channel=3, feature_base=16, n_class=5):
         super(Dilated_FCN, self).__init__()
+        self.n_channels = input_channel
+        self.n_classes = n_class
+        self.n_features = feature_base
         # Downsampling blocks
         self.conv1 = conv3x3(input_channel, feature_base)
         self.dropout1 = nn.Dropout(p=0.25)
