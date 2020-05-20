@@ -24,6 +24,9 @@ class NumpyDataset(Dataset):
 
     def __len__(self):
         return len(self.Numpylists)
+    
+    def normalize_(self, frame):
+        return (frame - np.amin(frame)) / (np.amax(frame - np.amin(frame))+1e-10)
 
     def _label_decomp(self, label_vol, num_cls):
         _batch_shape = list(label_vol.shape)
@@ -45,6 +48,8 @@ class NumpyDataset(Dataset):
         l_ = np.float32(np.load(name_l))                # shape: [256,256,1]
         l = self._label_decomp(l_, self.n_class)        # shape: [256,256,5]
         d = np.moveaxis(d_, -1, 0)                      # shape: [3,256,256]
+        for n in range(d.shape[0]):
+            d[n] = self.normalize_(d[n])
         l_ = np.moveaxis(l_, -1, 0)                     # shape: [1,256,256]
         l = np.moveaxis(l, -1, 0)                       # shape: [5,256,256]
         assert d.shape == (3, 256, 256)
