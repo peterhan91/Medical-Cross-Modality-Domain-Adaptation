@@ -2,17 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-def dice_loss(input, target):
-    smooth = 1.
-    loss = 0.
-    for c in range(n_classes):
-           iflat = input[:, c ].view(-1)
-           tflat = target[:, c].view(-1)
-           intersection = (iflat * tflat).sum()
-           loss += -1. * ((2. * intersection + smooth) /
-                             (iflat.sum() + tflat.sum() + smooth))
-    return loss
-
 class DiceLoss(nn.Module):
     def __init__(self, n_classes=5) -> None:
         super(DiceLoss, self).__init__()
@@ -40,8 +29,12 @@ class DiceLoss(nn.Module):
 
         # compute the actual dice score
         dims = (0, 2, 3)
-        intersection = torch.sum(input_soft * target, dims)
-        cardinality = torch.sum(input_soft + target, dims)
+        # intersection = torch.sum(input_soft * target, dims)
+        # cardinality = torch.sum(input_soft + target, dims)
+        tp = torch.sum(input_soft * target, dims)
+        fn = torch.sum((1.-input_soft) * target, dims)
+        fp = torch.sum(input_soft * (1 - target), dims)
 
-        dice_score = -2. * intersection / (cardinality + self.eps)
-        return torch.mean(dice_score)
+        # dice_score = -1.*((2.*intersection+1.) / (cardinality+1.))
+        dice = -((2 * tp + 1.) / (2 * tp + fp + fn + 1.))
+        return torch.mean(dice)

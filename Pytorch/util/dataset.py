@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
+from skimage.transform import rotate
 
 digits = re.compile(r'(\d+)')
 def tokenize(filename):
@@ -24,9 +25,6 @@ class NumpyDataset(Dataset):
 
     def __len__(self):
         return len(self.Numpylists)
-    
-    def normalize_(self, frame):
-        return (frame - np.amin(frame)) / (np.amax(frame - np.amin(frame))+1e-10)
 
     def _label_decomp(self, label_vol, num_cls):
         _batch_shape = list(label_vol.shape)
@@ -47,25 +45,96 @@ class NumpyDataset(Dataset):
         d_ = np.float32(np.load(name_d))                # shape: [256,256,3]
         l_ = np.float32(np.load(name_l))                # shape: [256,256,1]
         l = self._label_decomp(l_, self.n_class)        # shape: [256,256,5]
-        d = np.moveaxis(d_, -1, 0)                      # shape: [3,256,256]
-        for n in range(d.shape[0]):
-            d[n] = self.normalize_(d[n])
-        l_ = np.moveaxis(l_, -1, 0)                     # shape: [1,256,256]
-        l = np.moveaxis(l, -1, 0)                       # shape: [5,256,256]
-        assert d.shape == (3, 256, 256)
-        assert l.shape == (self.n_class, 256, 256)
-        assert l_.shape == (1, 256, 256)
+        assert d_.shape == (256, 256, 3)
+        assert l.shape == (256, 256, self.n_class)
+        assert l_.shape == (256, 256, 1)
 
-        sample = {'buffers': d, 'labels': l, 'labels_':np.squeeze(l_)}
+        sample = {'buffers': d_, 'labels': l, 'labels_':np.squeeze(l_)}
         if self.transform:
             sample = self.transform(sample)
+        
         return sample 
 
 class ToTensor(object):
     def __call__(self, sample):
         buffers, labels, labels_ = sample['buffers'], sample['labels'], sample['labels_']
+        buffers = buffers.transpose((2, 0, 1))
+        labels = labels.transpose((2, 0, 1))
         return {
                 'buffers': torch.from_numpy(buffers),
                 'labels': torch.from_numpy(labels),
                 'labels_': torch.from_numpy(labels_)
                 }
+
+class RandomCrop(object):
+
+    def __init__(self, output_size):
+        assert isinstance(output_size, (int, tuple))
+        if isinstance(output_size, int):
+            self.output_size = (output_size, output_size)
+        else:
+            assert len(output_size) == 2
+            self.output_size = output_size
+
+    def __call__(self, sample):
+        image, mask, mask_ = sample['buffers'], sample['labels'], sample['labels_']
+
+        h, w = image.shape[:2]
+        new_h, new_w = self.output_size
+
+        top = np.random.randint(0, h - new_h)
+        left = np.random.randint(0, w - new_w)
+
+        image = image[top: top + new_h,
+                      left: left + new_w, :]
+        mask = mask[top: top + new_h,
+                      left: left + new_w, :]
+        mask_ = mask_[top: top + new_h,
+                      left: left + new_w]
+
+        return {'buffers': image, 'labels': mask, 'labels_':mask_}
+
+class HorizontalFlip(object):
+
+    def __init__(self, flip_prob):
+        self.flip_prob = flip_prob
+
+    def __call__(self, sample):
+        image, mask, mask_ = sample['buffers'], sample['labels'], sample['labels_']
+
+        if np.random.rand() > self.flip_prob:
+            return {'buffers': image, 'labels': mask, 'labels_':mask_}
+
+        image = np.fliplr(image).copy()
+        mask = np.fliplr(mask).copy()
+        mask_ = np.fliplr(mask_).copy()
+
+        return {'buffers': image, 'labels': mask, 'labels_':mask_}
+
+class VerticallFlip(object):
+
+    def __init__(self, flip_prob):
+        self.flip_prob = flip_prob
+
+    def __call__(self, sample):
+        image, mask, mask_ = sample['buffers'], sample['labels'], sample['labels_']
+
+        if np.random.rand() > self.flip_prob:
+            return {'buffers': image, 'labels': mask, 'labels_':mask_}
+
+        image = np.flipud(image).copy()
+        mask = np.flipud(mask).copy()
+        mask_ = np.flipud(mask_).copy()
+
+        return {'buffers': image, 'labels': mask, 'labels_':mask_}
+
+class Normalize(object):
+    # use this normalize method after ToTensor()
+    
+    def __call__(self, sample):
+        image, mask, mask_ = sample['buffers'], sample['labels'], sample['labels_']
+
+        for n in range(image.shape[0]):
+            image[n] = (image[n] - np.mean(image[n])) / (np.std(image[n])+1e-7)
+
+        return {'buffers': image, 'labels': mask, 'labels_':mask_}
