@@ -7,3 +7,4 @@ Pytorch/runs/
 *.pth.tar
 basic_unet_example/
 brain-segmentation-pytorch/
+*.ipynb
