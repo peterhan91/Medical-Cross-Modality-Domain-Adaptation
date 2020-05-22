@@ -136,8 +136,8 @@ class P_Block(nn.Module): # Upsampling block with pixel shuffle and 4 conv
         self.conv3 = conv3x3(inplanes, inplanes*n_cls, stride, mode='replicate')
         self.dropout3 = nn.Dropout(p=DP_rate)
         self.pixelshuffle = nn.PixelShuffle(8)
-        self.conv4 = conv5x5(int(inplanes/64*n_cls), n_cls, stride, mode='replicate')
-        # self.conv4 = conv1x1(int(inplanes/64*n_cls), n_cls)
+        # self.conv4 = conv5x5(int(inplanes/64*n_cls), n_cls, stride, mode='replicate')
+        self.conv4 = conv1x1(int(inplanes/64*n_cls), n_cls)
         self.stride = stride
 
     def forward(self, x):

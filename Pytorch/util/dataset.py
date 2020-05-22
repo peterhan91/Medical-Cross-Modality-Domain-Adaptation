@@ -1,10 +1,13 @@
 import os
 import re
+import random
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 from skimage.transform import rotate
+from skimage import exposure
+from util.utils import *
 
 digits = re.compile(r'(\d+)')
 def tokenize(filename):
@@ -61,9 +64,9 @@ class ToTensor(object):
         buffers = buffers.transpose((2, 0, 1))
         labels = labels.transpose((2, 0, 1))
         return {
-                'buffers': torch.from_numpy(buffers),
-                'labels': torch.from_numpy(labels),
-                'labels_': torch.from_numpy(labels_)
+                'buffers': torch.from_numpy(buffers).type(torch.FloatTensor),
+                'labels': torch.from_numpy(labels).type(torch.FloatTensor),
+                'labels_': torch.from_numpy(labels_).type(torch.FloatTensor)
                 }
 
 class RandomCrop(object):
@@ -128,8 +131,66 @@ class VerticallFlip(object):
 
         return {'buffers': image, 'labels': mask, 'labels_':mask_}
 
+class RandomGamma(object):
+    # change Gamma (brightness) of the input image only  
+
+    def __call__(self, sample):
+        image, mask, mask_ = sample['buffers'], sample['labels'], sample['labels_']
+        gamma = random.uniform(0.8, 1.2)
+
+        for n in range(image.shape[-1]):
+            # image[:,:,n] = exposure.rescale_intensity(image[:,:,n])
+            image[:,:,n] = exposure.adjust_gamma(image[:,:,n], gamma)
+
+        return {'buffers': image, 'labels': mask, 'labels_':mask_} 
+
+class RandomRotation(object):
+
+    def __init__(self, prob):
+        self.prob = prob
+        self.rotation = [90, 180, 270]    
+
+    def __call__(self, sample):
+        image, mask, mask_ = sample['buffers'], sample['labels'], sample['labels_']
+        index = np.random.randint(0, 3)
+
+        if np.random.rand() > self.prob:
+            return {'buffers': image, 'labels': mask, 'labels_':mask_}
+
+        for n in range(image.shape[-1]):
+            image[:,:,n] = rotate(image[:,:,n], self.rotation[index])
+        for m in range(mask.shape[-1]):
+            mask[:,:,m] = rotate(mask[:,:,m], self.rotation[index])
+        mask_ = rotate(mask_, self.rotation[index])
+
+        return {'buffers': image, 'labels': mask, 'labels_':mask_} 
+
+class RandomElastic(object):
+
+    def __init__(self, prob):
+        self.prob = prob  
+
+    def __call__(self, sample):
+        image, mask, mask_ = sample['buffers'], sample['labels'], sample['labels_']
+
+        if np.random.rand() > self.prob:
+            return {'buffers': image, 'labels': mask, 'labels_':mask_}
+
+        im_merge = np.concatenate((image, mask, mask_[...,None]), axis=2)
+        im_merge_t = elastic_transform(im_merge, 
+                                    im_merge.shape[1] * 3, 
+                                    im_merge.shape[1] * 0.1,
+                                    im_merge.shape[1] * 0.1)
+        
+        image = im_merge_t[..., :image.shape[-1]]
+        mask = im_merge_t[..., image.shape[-1]:image.shape[-1]+mask.shape[-1]]
+        mask_ = np.squeeze(im_merge_t[..., -1])
+
+        return {'buffers': image, 'labels': mask, 'labels_':mask_} 
+
+
 class Normalize(object):
-    # use this normalize method after ToTensor()
+    # use this normalize method right before ToTensor()
     
     def __call__(self, sample):
         image, mask, mask_ = sample['buffers'], sample['labels'], sample['labels_']

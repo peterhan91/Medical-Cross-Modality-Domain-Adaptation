@@ -30,16 +30,19 @@ def train_net(model, device, num_classes,
                                             transform=transforms.Compose([
                                                 HorizontalFlip(0.5),
                                                 VerticallFlip(0.5),
-                                                # RandomCrop(128),
+                                                RandomRotation(0.5),
+                                                RandomElastic(0.8),
+                                                # RandomGamma(),
+                                                RandomCrop(128),
                                                 Normalize(),
                                                 ToTensor()
                                                 ])), 
-                                batch_size=batch_size, shuffle=True, num_workers=32
+                                batch_size=batch_size, shuffle=True, num_workers=48
                                 )
     val_dataloader = DataLoader(
                                 NumpyDataset(directory, mode='valid', 
-                                            transform=transforms.Compose([ToTensor()])), 
-                                batch_size=batch_size, shuffle=False, num_workers=32
+                                            transform=transforms.Compose([Normalize(), ToTensor()])), 
+                                batch_size=batch_size, shuffle=False, num_workers=48
                                 )                                
     dataloaders = {'train': train_dataloader, 'val': val_dataloader}
     dataset_sizes = {x: len(dataloaders[x].dataset) for x in ['train', 'val']}
@@ -160,7 +163,7 @@ if __name__ == '__main__':
                   num_classes=5,
                   directory='/media/tianyu.han/mri-scratch/DeepLearning/Cardiac_4D/MRCT/',
                   LR=3e-4,
-                  batch_size=32,
+                  batch_size=128,
                   num_epochs=100,
                   path=os.path.join(checkpoint_dir,
                                     'fcn.pth.tar')
